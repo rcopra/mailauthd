@@ -153,6 +153,14 @@ func parseTerm(record, f string) (*term, error) {
 		t.arg = arg
 		return &t, nil
 	default:
+		// TODO(checkhost): RFC 7208 4.6.1 maps unknown mechanisms to
+		// permerror, but this branch also catches valid, unimplemented
+		// mechanisms (a, mx, ptr, exists, include) and reports them as
+		// UnsupportedError. The conformance harness compensates by
+		// running permerror-only cases even when records parse as
+		// unsupported, and CheckHost must map UnsupportedError for an
+		// unknown mechanism to permerror. Remove this comment when the
+		// evaluator distinguishes the two cases.
 		return nil, &UnsupportedError{record, fmt.Sprintf("mechanism %q not implemented", name)}
 	}
 }
