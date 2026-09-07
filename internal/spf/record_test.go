@@ -153,7 +153,7 @@ func TestParseRecordErrors(t *testing.T) {
 	}
 }
 
-func TestParseRecordUnknownMechanismIsReported(t *testing.T) {	// Unknown mechanisms must be distinguishable from plain syntax errors
+func TestParseRecordUnknownMechanismIsReported(t *testing.T) { // Unknown mechanisms must be distinguishable from plain syntax errors
 	// so the conformance harness can scope which cases can run yet.
 	_, err := ParseRecord("v=spf1 a:example.com -all")
 	if !IsUnsupported(err) {

@@ -121,7 +121,7 @@ func CheckHost(ctx context.Context, r dnsres.Resolver, ip net.IP, domain, sender
 // qualifierString renders the term qualifier, defaulting to '+' (which is
 // implicit in records).
 func (t term) qualifierString() string {
-	if t.qualifier == '+' || t.qualifier == 0 {
+	if t.qualifier == '+' {
 		return "+"
 	}
 	return string(t.qualifier)
@@ -142,17 +142,7 @@ func matchIP4(ip net.IP, arg string) bool {
 	if v4 == nil {
 		return false // ip4 never matches an IPv6 connection
 	}
-	addrStr, hasCIDR, cidrStr := cutCIDR(arg)
-	bits := 32
-	if hasCIDR {
-		bits, _ = parseCIDRLen(cidrStr, 32)
-	}
-	network := netip.MustParseAddr(addrStr)
-	connection, ok := netip.AddrFromSlice(v4)
-	if !ok {
-		return false
-	}
-	return netip.PrefixFrom(network, bits).Contains(connection)
+	return matchIPNetwork(v4, arg, 32)
 }
 
 // matchIP6 reports whether ip is inside the ip6 mechanism argument
@@ -162,13 +152,20 @@ func matchIP6(ip net.IP, arg string) bool {
 	if v6 == nil || ip.To4() != nil {
 		return false // IPv4-mapped connections count as IPv4 (RFC 7208 5)
 	}
+	return matchIPNetwork(v6, arg, 128)
+}
+
+// matchIPNetwork reports whether the connection IP (as a byte slice of
+// the right family) falls inside "addr[/bits]"; maxBits is the family's
+// width. The argument was validated at parse time.
+func matchIPNetwork(connectionBytes []byte, arg string, maxBits int) bool {
 	addrStr, hasCIDR, cidrStr := cutCIDR(arg)
-	bits := 128
+	bits := maxBits
 	if hasCIDR {
-		bits, _ = parseCIDRLen(cidrStr, 128)
+		bits, _ = parseCIDRLen(cidrStr, maxBits)
 	}
 	network := netip.MustParseAddr(addrStr)
-	connection, ok := netip.AddrFromSlice(v6)
+	connection, ok := netip.AddrFromSlice(connectionBytes)
 	if !ok {
 		return false
 	}

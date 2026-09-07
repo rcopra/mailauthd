@@ -1,6 +1,13 @@
 package main
 
-import "testing"
+import (
+	"context"
+	"net"
+	"strings"
+	"testing"
+
+	"mailauthd/internal/dnsres"
+)
 
 // Table-driven tests for the sender identity extraction from RFC 5322
 // headers.
@@ -64,6 +71,21 @@ func TestSenderIdentity(t *testing.T) {
 			domain: "",
 			ok:     false,
 		},
+		// RFC 5322 wire format uses CRLF, including the blank line.
+		{
+			name:   "crlf-message",
+			msg:    "Return-Path: <bounce@example.com>\r\n\r\nReturn-Path: <body@attacker.com>\n",
+			domain: "example.com",
+			sender: "bounce@example.com",
+			ok:     true,
+		},
+		{
+			name:   "crlf-body-ignored",
+			msg:    "From: <a@example.com>\r\n\r\nReturn-Path: <body@attacker.com>\r\n",
+			domain: "example.com",
+			sender: "a@example.com",
+			ok:     true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -71,6 +93,61 @@ func TestSenderIdentity(t *testing.T) {
 			if ok != tt.ok || domain != tt.domain || sender != tt.sender {
 				t.Errorf("senderIdentity = (%q, %q, %v), want (%q, %q, %v)",
 					domain, sender, ok, tt.domain, tt.sender, tt.ok)
+			}
+		})
+	}
+}
+
+// singleZoneResolver is a minimal dnsres.Resolver fixture serving canned
+// TXT records; everything else fails temporarily.
+type singleZoneResolver struct {
+	txt map[string][]string
+}
+
+func (r *singleZoneResolver) LookupTXT(_ context.Context, name string) ([]string, error) {
+	recs, ok := r.txt[strings.ToLower(strings.TrimSuffix(name, "."))]
+	if !ok {
+		return nil, dnsres.ErrNotFound
+	}
+	return recs, nil
+}
+
+func (r *singleZoneResolver) LookupMX(_ context.Context, _ string) ([]*net.MX, error) {
+	return nil, dnsres.ErrTempError
+}
+
+func (r *singleZoneResolver) LookupIP(_ context.Context, _ string) ([]net.IP, error) {
+	return nil, dnsres.ErrTempError
+}
+
+// End-to-end test of the CLI evaluation path against a fixture resolver:
+// message in, verdict.Result out.
+func TestEvalSPF(t *testing.T) {
+	msg := "" +
+		"Return-Path: <bounce@example.com>\r\n" +
+		"From: Someone <someone@example.com>\r\n" +
+		"Subject: test\r\n" +
+		"\r\n" +
+		"Return-Path: <body@attacker.com>\r\n" +
+		"body\r\n"
+
+	fixture := &singleZoneResolver{txt: map[string][]string{
+		"example.com": {"v=spf1 ip4:192.0.2.10 -all"},
+	}}
+
+	tests := []struct {
+		name    string
+		ip      string
+		outcome string
+	}{
+		{"match-pass", "192.0.2.10", "pass"},
+		{"no-match-fail", "192.0.3.1", "fail"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := evalSPF([]byte(msg), net.ParseIP(tt.ip), fixture)
+			if result.Check != "spf" || result.Outcome != tt.outcome || result.Reason == "" {
+				t.Errorf("evalSPF = %+v, want check=spf outcome=%q with reason", result, tt.outcome)
 			}
 		})
 	}

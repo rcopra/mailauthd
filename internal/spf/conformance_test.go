@@ -28,8 +28,8 @@ type suiteTest struct {
 }
 
 type suiteSection struct {
-	Description string                `json:"description"`
-	Tests       map[string]suiteTest  `json:"tests"`
+	Description string                       `json:"description"`
+	Tests       map[string]suiteTest         `json:"tests"`
 	Zonedata    map[string][]json.RawMessage `json:"zonedata"`
 }
 
@@ -139,14 +139,21 @@ func TestRFC7208Conformance(t *testing.T) {
 
 				// Scope: the case can run only if every SPF record in
 				// its zone parses with the implemented subset. Records
-				// using unimplemented surface make us skip, not fail.
+				// using unimplemented surface make us skip — except when
+				// the only expected result is permerror: RFC 7208 4.6.1
+				// maps unknown mechanisms/modifiers to permerror anyway,
+				// so those cases are within reach of the subset.
 				zoneName := strings.ToLower(strings.TrimSuffix(domain, "."))
+				permerrorOnly := len(want) == 1 && want[0] == PermError
 				for _, rec := range r.zones[zoneName].txt {
 					if !isSPF(rec) {
 						continue
 					}
 					_, err := ParseRecord(rec)
 					if IsUnsupported(err) {
+						if permerrorOnly {
+							continue
+						}
 						t.Skipf("unimplemented SPF surface: %v", err)
 					}
 				}

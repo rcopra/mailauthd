@@ -33,7 +33,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	result := evalSPF(msg, ip)
+	result := evalSPF(msg, ip, dnsres.NetResolver{R: net.DefaultResolver})
 	out, err := json.Marshal(result)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mailauth: encoding verdict: %v\n", err)
@@ -45,7 +45,7 @@ func main() {
 // evalSPF runs the SPF check for a message: the sender identity is the
 // Return-Path (the SMTP MAIL FROM as recorded by the receiver), falling
 // back to the From header domain.
-func evalSPF(msg []byte, ip net.IP) verdict.Result {
+func evalSPF(msg []byte, ip net.IP, resolver dnsres.Resolver) verdict.Result {
 	domain, sender, ok := senderIdentity(msg)
 	if !ok {
 		return verdict.Result{
@@ -54,7 +54,6 @@ func evalSPF(msg []byte, ip net.IP) verdict.Result {
 			Reason:  "message has no sender domain (no Return-Path or From header)",
 		}
 	}
-	resolver := dnsres.NetResolver{R: net.DefaultResolver}
 	outcome, reason := spf.CheckHost(context.Background(), resolver, ip, domain, sender)
 	return verdict.Result{Check: verdict.CheckSPF, Outcome: outcome, Reason: reason}
 }
@@ -84,13 +83,17 @@ func senderIdentity(msg []byte) (domain, sender string, ok bool) {
 }
 
 // headerLines returns the header block of an RFC 5322 message (everything
-// before the first empty line).
+// before the first empty line). Handles both LF and CRLF line endings:
+// wire-format mail uses CRLF, where "\r\n\r\n" contains no "\n\n".
 func headerLines(msg []byte) []string {
 	text := string(msg)
-	if i := strings.Index(text, "\n\n"); i >= 0 {
-		text = text[:i]
+	end := len(text)
+	for _, sep := range []string{"\r\n\r\n", "\n\n"} {
+		if i := strings.Index(text, sep); i >= 0 && i < end {
+			end = i
+		}
 	}
-	return strings.Split(text, "\n")
+	return strings.Split(text[:end], "\n")
 }
 
 // findHeader returns the value of the first header with the given

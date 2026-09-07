@@ -308,9 +308,10 @@ func TestCheckHost(t *testing.T) {
 	}
 }
 
-func TestCheckHostReasonMentionsMechanism(t *testing.T) {	r := newFixtureResolver(map[string][]string{"example.com": {"v=spf1 ip4:192.0.2.0/24 -all"}})
+func TestCheckHostReasonMentionsMechanism(t *testing.T) {
+	r := newFixtureResolver(map[string][]string{"example.com": {"v=spf1 ip4:192.0.2.0/24 -all"}})
 	_, reason := CheckHost(context.Background(), r, net.ParseIP(v4ip), "example.com", "foo@example.com")
-		if !strings.Contains(reason, "ip4:192.0.2.0/24") {
+	if !strings.Contains(reason, "ip4:192.0.2.0/24") {
 		t.Errorf("reason %q does not mention the matching mechanism", reason)
-		}
+	}
 }
