@@ -18,11 +18,10 @@ var (
 	ErrTempError = errors.New("dnsres: temporary DNS failure")
 )
 
-// mapNetError translates a *net.DNSError into the sentinel errors above,
+// mapNetError translates a *net.DNSError into a sentinel errors above,
 // wrapping the original. Other errors pass through unchanged.
 func mapNetError(err error) error {
-	var dnsErr *net.DNSError
-	if errors.As(err, &dnsErr) {
+	if dnsErr, ok := errors.AsType[*net.DNSError](err); ok {
 		switch {
 		case dnsErr.IsNotFound:
 			return ErrNotFound
