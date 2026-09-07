@@ -1,3 +1,4 @@
+// Command mailauthd runs the mailauth HTTP service.
 package main
 
 import (
@@ -5,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 )
 
 func main() {
@@ -12,12 +14,22 @@ func main() {
 	if addr == "" {
 		addr = ":8080"
 	}
-	http.HandleFunc("/v1/verify", func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/verify", func(w http.ResponseWriter, r *http.Request) {
 		// TODO(M2): bounded-semaphore backpressure + verdict pipeline.
-		respondWithError(w, http.StatusNotImplemented, "not implemented")
+		_ = respondWithError(w, http.StatusNotImplemented, "not implemented")
 	})
+	srv := &http.Server{
+		Addr:              addr,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		Handler:           mux,
+	}
+	// #nosec G706 -- addr comes from operator-provided env, not request data.
 	log.Printf("mailauthd listening on %s", addr)
-	log.Fatal(http.ListenAndServe(addr, nil))
+	log.Fatal(srv.ListenAndServe())
 }
 
 func respondWithJSON(w http.ResponseWriter, code int, payload any) error {
@@ -27,7 +39,8 @@ func respondWithJSON(w http.ResponseWriter, code int, payload any) error {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	w.Write(response)
+	// A write error after WriteHeader only means the client went away.
+	_, _ = w.Write(response)
 	return nil
 }
 
