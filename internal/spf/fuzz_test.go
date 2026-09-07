@@ -3,8 +3,8 @@ package spf
 import "testing"
 
 // FuzzParseRecord hammers the record parser. The parser must never panic
-// and must reject invalid records without producing partial garbage. Any
-// crash becomes a table row in record_test.go (see docs/why-fuzzing.md).
+// and must reject invalid records without producing partial garbage.
+// Any crash becomes a table row in record_test.go
 
 func FuzzParseRecord(f *testing.F) {
 	seeds := []string{
