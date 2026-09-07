@@ -1,4 +1,3 @@
-// Command mailauthd runs the mailauth HTTP service.
 package main
 
 import (
@@ -21,8 +20,7 @@ func main() {
 	log.Fatal(http.ListenAndServe(addr, nil))
 }
 
-// respondWithJSON writes payload as a JSON response.
-func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) error {
+func respondWithJSON(w http.ResponseWriter, code int, payload any) error {
 	response, err := json.Marshal(payload)
 	if err != nil {
 		return err
@@ -33,7 +31,6 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) error
 	return nil
 }
 
-// respondWithError writes a JSON error response {"error": msg}.
 func respondWithError(w http.ResponseWriter, code int, msg string) error {
 	return respondWithJSON(w, code, map[string]string{"error": msg})
 }
