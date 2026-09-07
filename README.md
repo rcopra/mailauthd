@@ -85,10 +85,10 @@ delta. (Populated in M3.)
 
 ## Development
 
-- `docs/README.md` — short reference lessons on every concept in the project
-  (SPF, DKIM, DMARC, the Verdict model, the DNS seam, backpressure, fuzzing).
-- `AGENTS.md` — testing discipline and commit rules; `docs/workflow.md` — how
-  the agentic workflow is split, honestly.
+- `docs/` — local reference lessons (SPF, DKIM, DMARC, the Verdict model, the
+  DNS seam, backpressure, fuzzing). Kept out of version control on purpose.
+- `AGENTS.md` — testing discipline and commit rules; `docs/workflow.md` (local)
+  — how the agentic workflow is split, honestly.
 - Testing: table-driven, RFC conformance suites (open-spf.org), fuzz targets on
   all parsers. No production code touches real DNS in tests.
 - Stdlib first; the only external dependency is the wrapped DKIM library.
