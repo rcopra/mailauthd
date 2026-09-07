@@ -2,3 +2,4 @@ mailauthd
 mailauth
 *.eml
 .DS_Store
+docs/
