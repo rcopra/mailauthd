@@ -85,6 +85,8 @@ delta. (Populated in M3.)
 
 ## Development
 
+- `docs/README.md` — short reference lessons on every concept in the project
+  (SPF, DKIM, DMARC, the Verdict model, the DNS seam, backpressure, fuzzing).
 - `AGENTS.md` — testing discipline and commit rules; `docs/workflow.md` — how
   the agentic workflow is split, honestly.
 - Testing: table-driven, RFC conformance suites (open-spf.org), fuzz targets on
