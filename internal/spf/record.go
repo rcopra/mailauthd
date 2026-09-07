@@ -3,6 +3,7 @@ package spf
 import (
 	"fmt"
 	"net/netip"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 )
@@ -182,34 +183,54 @@ func isModifierName(name string) bool {
 	return true
 }
 
-// validateMacroString checks a macro-string per RFC 7208 7.1: literals
-// are visible ASCII except '%'; '%' must start one of "%%", "%_", "%-",
-// or "%{" macro-letter transformers *delimiter "}".
+// validateMacroString checks a macro-string per RFC 7208 7.1: a sequence
+// of visible-ASCII literals and "%"-escapes. "%" must start one of
+// "%%", "%_", "%-", or a "%{" macro-letter transformers *delimiter "}"
+// expansion.
 func validateMacroString(s string) error {
-	for i := 0; i < len(s); i++ {
-		if s[i] != '%' {
-			if s[i] < 0x21 || s[i] > 0x7e {
-				return fmt.Errorf("invalid character in macro-string")
-			}
-			continue
+	for len(s) > 0 {
+		// The literal run before the next "%" (or the end of s).
+		lit := s
+		if i := strings.IndexByte(s, '%'); i >= 0 {
+			lit = s[:i]
 		}
-		if i+1 >= len(s) {
+		if err := validateVisibleASCII(lit); err != nil {
+			return err
+		}
+		s = s[len(lit):]
+		if s == "" {
+			return nil // ended on a literal run
+		}
+		if s == "%" {
 			return fmt.Errorf("dangling %%")
 		}
-		switch s[i+1] {
-		case '%', '_', '-':
-			i++
-		case '{':
-			end := strings.IndexByte(s[i:], '}')
-			if end < 0 {
+
+		// s starts with "%": consume the two-byte escape.
+		switch s[1] {
+		case '%', '_', '-': // literal %, space, or hyphen
+			s = s[2:]
+		case '{': // expansion: "%{" macro-letter transformers *delimiter "}"
+			closing := strings.IndexByte(s, '}')
+			if closing < 0 {
 				return fmt.Errorf("unterminated macro expansion")
 			}
-			if err := validateMacroBody(s[i+2 : i+end]); err != nil {
+			if err := validateMacroBody(s[2:closing]); err != nil {
 				return err
 			}
-			i += end
+			s = s[closing+1:]
 		default:
-			return fmt.Errorf("invalid %% escape %q", s[i:i+2])
+			return fmt.Errorf("invalid %% escape %q", s[:2])
+		}
+	}
+	return nil
+}
+
+// validateVisibleASCII reports an error unless every byte of s is
+// printable non-space ASCII (0x21-0x7e), as macro-string literals require.
+func validateVisibleASCII(s string) error {
+	for i := 0; i < len(s); i++ {
+		if s[i] < 0x21 || s[i] > 0x7e {
+			return fmt.Errorf("invalid character in macro-string")
 		}
 	}
 	return nil
@@ -241,7 +262,7 @@ func validateMacroBody(body string) error {
 // validateIP4Arg validates an ip4 mechanism argument:
 // ip4-network = ip4-address ["/" ip4-cidr-length] (RFC 7208 5.6).
 func validateIP4Arg(arg string) error {
-	addrStr, hasCIDR, cidrStr := cutCIDR(arg)
+	addrStr, cidrStr, hasCIDR := strings.Cut(arg, "/")
 	addr, err := netip.ParseAddr(addrStr)
 	if err != nil || !addr.Is4() {
 		return fmt.Errorf("invalid ip4 address %q", addrStr)
@@ -257,7 +278,7 @@ func validateIP4Arg(arg string) error {
 // validateIP6Arg validates an ip6 mechanism argument:
 // ip6-network = ip6-address ["/" ip6-cidr-length] (RFC 7208 5.6).
 func validateIP6Arg(arg string) error {
-	addrStr, hasCIDR, cidrStr := cutCIDR(arg)
+	addrStr, cidrStr, hasCIDR := strings.Cut(arg, "/")
 	addr, err := netip.ParseAddr(addrStr)
 	if err != nil {
 		return fmt.Errorf("invalid ip6 address %q", addrStr)
@@ -274,30 +295,34 @@ func validateIP6Arg(arg string) error {
 	return nil
 }
 
-// cutCIDR splits "addr/bits" into its parts.
-func cutCIDR(arg string) (addr string, hasCIDR bool, cidr string) {
-	if i := strings.IndexByte(arg, '/'); i >= 0 {
-		return arg[:i], true, arg[i+1:]
-	}
-	return arg, false, ""
-}
-
-// parseCIDRLen parses a CIDR length: cidr-length = "/" ( "0" /
-// %x31-39 *DIGIT ) (RFC 7208 5.6) — no leading zeros — with value in
-// [0, max].
+// parseCIDRLen parses a CIDR length (RFC 7208 5.6):
+//
+//	cidr-length = "/" ( "0" / %x31-39 *DIGIT )
+//
+// i.e. "0" or a decimal number with no leading zeros, at most max.
 func parseCIDRLen(s string, max int) (int, bool) {
-	if s == "" || (len(s) > 1 && s[0] == '0') {
+	if !isDigits(s) {
 		return 0, false
 	}
-	n := 0
-	for _, r := range s {
-		if r < '0' || r > '9' {
-			return 0, false
-		}
-		n = n*10 + int(r-'0')
-		if n > max {
-			return 0, false
-		}
+	if len(s) > 1 && s[0] == '0' {
+		return 0, false // no leading zeros; a bare "0" is valid
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil || n > max {
+		return 0, false // Atoi's error covers overflow
 	}
 	return n, true
+}
+
+// isDigits reports whether s is a non-empty run of ASCII digits.
+func isDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }

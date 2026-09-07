@@ -153,6 +153,29 @@ func TestParseRecordErrors(t *testing.T) {
 	}
 }
 
+func TestParseRecordMacroStrings(t *testing.T) {
+	// RFC 7208 7.1: modifier values are macro-strings. Valid literals
+	// and every escape form ("%%", "%_", "%-", "%{...}") must parse.
+	tests := []struct {
+		name   string
+		record string
+	}{
+		{"literal", "v=spf1 moo=cow all"},
+		{"literal-percent-escape", "v=spf1 moo=50%% all"},
+		{"space-and-hyphen-escapes", "v=spf1 moo=a%_b%-c all"},
+		{"expansion", "v=spf1 moo=%{d} all"},
+		{"expansion-with-transformers", "v=spf1 moo=%{ir}.%{v} all"},
+		{"expansion-and-literal", "v=spf1 moo=%{d}.example.com all"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := ParseRecord(tt.record); err != nil {
+				t.Errorf("ParseRecord(%q): %v", tt.record, err)
+			}
+		})
+	}
+}
+
 func TestParseRecordUnknownMechanismIsReported(t *testing.T) { // Unknown mechanisms must be distinguishable from plain syntax errors
 	// so the conformance harness can scope which cases can run yet.
 	_, err := ParseRecord("v=spf1 a:example.com -all")
