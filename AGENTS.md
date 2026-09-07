@@ -11,6 +11,10 @@ Instructions for AI agents (and humans) working in this repo.
 - SPF conformance is validated against the open-spf.org RFC 7208 YAML test
   suite in `internal/spf/testdata/`. Do not hand-pick cases; run the suite.
 - Run `go test ./...` and `go vet ./...` before any commit.
+- The pre-push hook (`.githooks/pre-push`) auto-runs `gofmt -w`, then gates
+  pushes on vet/staticcheck/gosec/test. Enable it with
+  `git config core.hooksPath .githooks`; keep its tool versions in sync with
+  `.github/workflows/ci.yml`.
 
 ## Code
 

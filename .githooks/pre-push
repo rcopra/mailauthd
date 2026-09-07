@@ -1,0 +1,28 @@
+#!/bin/sh
+# Pre-push hook: auto-correct formatting, then gate on the checks ci.yml runs.
+# Tool versions must stay in sync with .github/workflows/ci.yml.
+# Enable with: git config core.hooksPath .githooks
+set -e
+
+# Auto-correct: gofmt. Nothing gets pushed unformatted; the fixes are left in
+# the worktree to be committed.
+unformatted=$(gofmt -l .)
+if [ -n "$unformatted" ]; then
+    echo "pre-push: gofmt auto-fixed:"
+    echo "$unformatted" | sed 's/^/  /'
+    gofmt -w $unformatted
+    echo "pre-push: push aborted — commit the gofmt fixes and push again."
+    exit 1
+fi
+
+echo "pre-push: go vet"
+go vet ./...
+
+echo "pre-push: staticcheck"
+go run honnef.co/go/tools/cmd/staticcheck@2025.1.1 -checks=all ./...
+
+echo "pre-push: gosec"
+go run github.com/securego/gosec/v2/cmd/gosec@v2.29.0 -quiet ./...
+
+echo "pre-push: go test"
+go test ./...
