@@ -25,3 +25,20 @@ Instructions for AI agents (and humans) working in this repo.
   message says what was delegated and what was reviewed by hand.
 - Never commit generated benchmark artifacts; benchmark numbers live in the
   README with the methodology next to them.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in Linear, accessed via the Linear MCP server configured in
+`.mcp.json`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`,
+`ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `CONTEXT.md` glossary; ADRs go in `docs/adr/` when needed.
+See `docs/agents/domain.md`.

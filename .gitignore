@@ -2,4 +2,5 @@ mailauthd
 mailauth
 *.eml
 .DS_Store
-docs/
+docs/*
+!docs/agents/
