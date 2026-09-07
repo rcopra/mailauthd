@@ -14,5 +14,5 @@ jobs:
           go-version: "1.26"
       - run: go test ./...
       - run: go vet ./...
-      # M1: add fuzz smoke (`go test -fuzz FuzzSPF -fuzztime 10s`) and
-      # golangci-lint once the first fuzz target lands.
+      - name: Fuzz smoke
+        run: go test ./internal/spf/ -run '^$' -fuzz FuzzParseRecord -fuzztime 10s
