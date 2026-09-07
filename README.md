@@ -4,19 +4,32 @@ A Go service that answers one question about any email: **can this sender be
 trusted?** Submit a raw RFC 5322 message, get back a verdict — SPF, DKIM, and
 DMARC results with a final DMARC-derived disposition.
 
-Built as a demonstration of the things that matter when operating scan
-pipelines: streaming parsing, bounded concurrency with explicit backpressure,
-measured optimization (benchmarks below), RFC-precise conformance testing,
-and an agentic development workflow that is documented, not hidden.
+The point is not just the checks — it's the shape of the thing: a single Go
+process with streaming parsing, bounded concurrency and explicit backpressure,
+RFC-precise conformance testing, measured optimization (numbers below), and an
+agentic development workflow that is documented, not hidden.
 
 ## Status
 
 Work in progress. Milestones:
 
 - [ ] **M1** — SPF end-to-end via CLI, open-spf.org RFC 7208 conformance suite, fuzzing
-- [ ] **M2** — DKIM (via `go-msgauth`) + DMARC evaluation + HTTP service
+- [ ] **M2** — DKIM (via `go-msgauth`, wrapped — crypto correctness isn't the showcase, orchestration is) + DMARC evaluation + HTTP service
 - [ ] **M3** — load generator, `/metrics`, Docker, CI, benchmark tables
 - [ ] **M4** — writeup
+
+Done so far: scaffolded and committed — domain vocabulary (`internal/verdict`),
+DNS resolver seam (`internal/dnsres`), CLI and service stubs, CI, Dockerfile,
+architecture diagram (`docs/diagrams/`).
+
+## Two entry points, one core
+
+- **`mailauthd`** — the HTTP service. Long-running, concurrent, backpressured.
+- **`mailauth`** — the CLI. Same pipeline in-process: `mailauth < message.eml`,
+  Verdict JSON on stdout. No network, no server — this is also the bench harness.
+
+Both are thin front-ends over the same `internal/` packages; the HTTP layer is
+a wrapper, not the product.
 
 ## API (planned)
 
@@ -26,8 +39,6 @@ Content-Type: message/rfc822
 
 <raw message bytes>
 ```
-
-Response (planned shape — see `CONTEXT.md` for terms):
 
 ```json
 {
@@ -41,27 +52,22 @@ Response (planned shape — see `CONTEXT.md` for terms):
 ```
 
 No authentication in v1 — this is a demonstration service, not a public API.
+Vocabulary (`Check`, `Result`, `Disposition`, `Verdict`) is defined in
+`CONTEXT.md`.
 
-## Intake: how emails reach the verdict engine
+## Intake
 
-The auth checks are the expensive, novel part. Intake is deliberately boring:
-*obtain a MIME blob, POST it.* An email is just an RFC 5322 artifact — headers
-plus body — so anything holding that blob is a caller. Realistic intake
-surfaces, ranked by effort:
+The checks are the novel part; intake is deliberately boring — *obtain a MIME
+blob, POST it.* Surfaces, ranked by effort:
 
-| Intake | Mechanism | Effort | Status |
-|---|---|---|---|
-| Files / corpus | CLI, test fixtures, load generator | zero (built in) | in scope (M1/M3) |
-| Webhook receivers | Point a domain's MX at SendGrid Inbound Parse / Mailgun Routes; they POST raw MIME to `/v1/verify` — the production sample-collection pattern | ~1 day | future work |
-| IMAP / POP3 poller | Worker fetches from a dedicated mailbox (spam trap, `abuse@`, quarantine) and POSTs each message | ~1–2 days | stretch goal |
-| Maildir / mbox watcher | Watch a Maildir on a self-hosted box, POST new arrivals | ~1–2 days | stretch goal |
-| MTA content filter / milter | Scanner sits in-line during SMTP delivery via Postfix `content_filter` or a milter adapter | ~1 week+ | out of scope, known future work |
-| Custom MTA | Run SMTP yourself | weeks | explicitly not happening |
-
-The two entry points already shipped share one core: `mailauthd` is the HTTP
-service; the `mailauth` CLI runs the same pipeline in-process over stdin with
-no network involved. Benchmarks run through the CLI for this reason — verdict
-cost without socket noise.
+| Intake | Effort | Status |
+|---|---|---|
+| Files / corpus (CLI, fixtures, loadgen) | zero | in scope (M1/M3) |
+| Webhook receivers (SendGrid Inbound Parse, Mailgun Routes → raw MIME POST) | ~1 day | future work |
+| IMAP / POP3 poller (spam trap, `abuse@`, quarantine) | ~1–2 days | stretch goal |
+| Maildir / mbox watcher (self-hosted box) | ~1–2 days | stretch goal |
+| MTA content filter / milter (in-line scanning) | ~1 week+ | known future work |
+| Custom MTA | weeks | explicitly not happening |
 
 ## Benchmarks
 
@@ -76,6 +82,14 @@ concurrency sweep at 1/8/64.
 
 Secondary: real DNS with vs. without TTL cache — cache hit rate and latency
 delta. (Populated in M3.)
+
+## Development
+
+- `AGENTS.md` — testing discipline and commit rules; `docs/workflow.md` — how
+  the agentic workflow is split, honestly.
+- Testing: table-driven, RFC conformance suites (open-spf.org), fuzz targets on
+  all parsers. No production code touches real DNS in tests.
+- Stdlib first; the only external dependency is the wrapped DKIM library.
 
 ## License
 
